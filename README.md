@@ -1,4 +1,3 @@
-
 # Peddler
 
 [![Build Status](https://travis-ci.org/hakanensari/peddler.svg)](https://travis-ci.org/hakanensari/peddler)
@@ -18,7 +17,7 @@ Some MWS API sections may require additional authorisation from Amazon.
 Require the library.
 
 ```ruby
-require 'peddler'
+require "peddler"
 ```
 
 Create a client. Peddler provides one for each MWS API under an eponymous namespace.
@@ -30,7 +29,22 @@ client = MWS::Orders::Client.new
 client = MWS.orders
 ```
 
-Each client requires valid MWS credentials. You can set some or all when or after creating the client.
+Each client requires valid MWS credentials. You can set these globally in the shell.
+
+```bash
+export MWS_MARKETPLACE_ID=foo
+export MWS_MERCHANT_ID=bar
+export AWS_ACCESS_KEY_ID=baz
+export AWS_SECRET_ACCESS_KEY=qux
+```
+
+You can now instantiate a client.
+
+```ruby
+client = MWS::Orders::Client.new
+```
+
+Alternatively, you can set some or all credentials when or after creating the client.
 
 ```ruby
 client = MWS::Orders::Client.new(
@@ -39,14 +53,6 @@ client = MWS::Orders::Client.new(
   aws_access_key_id: "baz",
   aws_secret_access_key: "qux"
 )
-
-Alternatively, you can set these globally in the shell.
-
-```sh
-export MWS_MARKETPLACE_ID=foo
-export MWS_MERCHANT_ID=bar
-export AWS_ACCESS_KEY_ID=baz
-export AWS_SECRET_ACCESS_KEY=qux
 ```
 
 If you are creating a client for another seller, pass the latter's `MWSAuthToken` to the client.
@@ -55,13 +61,13 @@ If you are creating a client for another seller, pass the latter's `MWSAuthToken
 client.auth_token = "corge"
 ```
 
-Once you have a client with credentials, you can make requests to the API.
+Once you have a client with valid credentials, you should be able to make requests to the API.
 
-Peddler returns the response wrapped in a simple parser that handles both XML documents and flat files.
+Peddler returns the response wrapped in a parser that handles both XML documents and flat files.
 
 ```ruby
 parser = client.get_service_status
-parser.parse # will return Hash or a CSV object
+parser.parse # will return a Hash or CSV object
 ```
 
 You can swap the default parser with a purpose-built one.
@@ -75,20 +81,21 @@ For a sample implementation, see my [MWS Orders](https://github.com/hakanensari/
 Finally, you can handle network errors caused by throttling or other transient issues by defining an error handler.
 
 ```ruby
-MWS::Orders::Client.on_error do |request, response|
-  if response.status == 503
-    logger.info "I was throttled"
+MWS::Orders::Client.on_error do |e|
+  if e.response.status == 503
+    logger.warn e.response.message
   end
 end
 ```
 
-Alternatively, you can simply rescue.
+Alternatively, rescue.
 
 ```ruby
 begin
   client.some_method
-rescue Excon::Errors::ServiceUnavailable
-  sleep 1 and retry
+rescue Excon::Errors::ServiceUnavailable => e
+  logger.warn e.response.message
+  retry
 end
 ```
 
@@ -111,6 +118,12 @@ With the MWS Customer Information API, you can retrieve information from the cus
 The MWS Feeds API lets you upload inventory and order data to Amazon. You can also use this API to get information about the processing of feeds.
 
 [Read more](http://www.rubydoc.info/gems/peddler/MWS/Feeds/Client)
+
+### Finances
+
+The MWS Finances API enables you to obtain financial information relevant to your business with Amazon. You can obtain financial events for a given order, financial event group, or date range without having to wait until a statement period closes. You can also obtain financial event groups for a given date range.
+
+[Read more](http://www.rubydoc.info/gems/peddler/MWS/Finances/Client)
 
 ### Fulfillment Inbound Shipment
 

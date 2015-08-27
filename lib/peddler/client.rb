@@ -8,8 +8,6 @@ module Peddler
   # An abstract client
   #
   # Subclass to implement an MWS API section.
-  #
-  # rubocop:disable ClassLength
   class Client
     extend Forwardable
     include Jeff
@@ -69,14 +67,16 @@ module Peddler
 
       def inherited(base)
         base.params(params)
-        base.on_error(&@error_handler) if @error_handler
+        base.on_error(&@error_handler)
       end
     end
+
+    @error_handler = ->(e) { fail e }
 
     # Creates a new client instance
     #
     # @param opts [Hash]
-    # @option opts [String] :marketplace_id
+    # @option opts [String] :primary_marketplace_id
     # @option opts [String] :merchant_id
     # @option opts [String] :aws_access_key_id
     # @option opts [String] :aws_secret_access_key
@@ -97,12 +97,12 @@ module Peddler
       @primary_marketplace_id ||= ENV['MWS_MARKETPLACE_ID']
     end
 
-    # @deprecated Use {#primary_marketplace_id} instead.
+    # @deprecated Use {#primary_marketplace_id}.
     def marketplace_id
       @primary_marketplace_id
     end
 
-    # @deprecated Use {#primary_marketplace_id=} instead.
+    # @deprecated Use {#primary_marketplace_id=}.
     def marketplace_id=(marketplace_id)
       @primary_marketplace_id = marketplace_id
     end
@@ -165,24 +165,14 @@ module Peddler
     end
 
     # @api private
-    # rubocop:disable AbcSize, MethodLength
     def run
-      opts = defaults.merge(query: operation, headers: headers)
-      opts.store(:body, body) if body
+      opts = build_options
       opts.store(:response_block, Proc.new) if block_given?
       res = post(opts)
 
       parser.new(res, encoding)
     rescue Excon::Errors::Error => e
-      handle_error(e) or raise
-    rescue NoMethodError => e
-      if e.message == "undefined method `new' for #{parser}"
-        warn "[DEPRECATION] `Parser.parse` is deprecated. "\
-             "Please use `Parser.new` instead."
-        parser.parse(res, encoding)
-      else
-        raise
-      end
+      handle_error(e)
     end
 
     private
@@ -207,9 +197,31 @@ module Peddler
       self.class.parser
     end
 
+    def build_options
+      opts = defaults.merge(query: operation, headers: headers)
+      body ? opts.update(body: body) : opts
+    end
+
     def handle_error(e)
-      return false unless error_handler
-      error_handler.call(e.request, e.response)
+      e = decorate_error(e)
+      error_handler.call(*deprecate_error_handler_arguments(e))
+    end
+
+    def decorate_error(e)
+      if e.is_a?(::Excon::Errors::HTTPStatusError)
+        e.instance_variable_set(:@response, ErrorParser.new(e.response))
+      end
+
+      e
+    end
+
+    def deprecate_error_handler_arguments(e)
+      if error_handler.parameters.size == 2
+        warn "[DEPRECATION] Error handler now expects exception as argument."
+        [e.request, e.response]
+      else
+        [e]
+      end
     end
   end
 end
